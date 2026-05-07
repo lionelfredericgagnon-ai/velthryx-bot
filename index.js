@@ -83,19 +83,18 @@ client.on(Events.MessageDelete, async (message) => {
   try {
     if (!message.guild) return;
 
-    const logChannel = message.guild.channels.cache.get(process.env.LOG_CHANNEL_ID);
+    const logChannel = await message.guild.channels.fetch(process.env.LOG_CHANNEL_ID);
     if (!logChannel) return;
 
-    const author = message.author ? message.author.tag : 'Unknown user';
+    const author = message.author?.tag || "Unknown user";
 
     await logChannel.send({
       content: `🗑️ **Message Deleted**
 👤 Author: ${author}
-💬 Content: ${message.content || 'No content (embed/attachment or missing cache)'}`
+💬 Content: ${message.content || "No content (not cached or embed)"}`,
     });
-
   } catch (err) {
-    console.error('Log error:', err);
+    console.error("Delete log error:", err);
   }
 });
 
