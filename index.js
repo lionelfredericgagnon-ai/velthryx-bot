@@ -1,5 +1,4 @@
 require('dotenv').config();
-const { Events } = require('discord.js');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,10 +11,16 @@ const {
 } = require('discord.js');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 client.commands = new Collection();
+
+/* ---------------- COMMAND HANDLER ---------------- */
 
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
@@ -29,10 +34,9 @@ for (const folder of commandFolders) {
 
   for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-
     const command = require(filePath);
 
-    if ('data' in command && 'execute' in command) {
+    if (command?.data && command?.execute) {
       client.commands.set(command.data.name, command);
     } else {
       console.log(`[WARNING] Missing data or execute in ${filePath}`);
@@ -40,51 +44,61 @@ for (const folder of commandFolders) {
   }
 }
 
-client.once(Events.ClientReady, readyClient => {
+/* ---------------- READY EVENT ---------------- */
+
+client.once(Events.ClientReady, (readyClient) => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+/* ---------------- SLASH COMMANDS ---------------- */
+
+client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
 
-  if (!command) {
-    console.error('❌ Command not found.');
-    return;
-  }
+  if (!command) return;
 
   try {
     await command.execute(interaction);
   } catch (error) {
     console.error(error);
 
+    const reply = {
+      content: 'There was an error executing this command.',
+      ephemeral: true,
+    };
+
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: 'There was an error executing this command.',
-        ephemeral: true,
-      });
+      await interaction.followUp(reply);
     } else {
-      await interaction.reply({
-        content: 'There was an error executing this command.',
-        ephemeral: true,
-      });
+      await interaction.reply(reply);
     }
   }
 });
 
-client.login(process.env.TOKEN);
+/* ---------------- MESSAGE DELETE LOGGING ---------------- */
+
 client.on(Events.MessageDelete, async (message) => {
-  if (!message.guild) return;
+  try {
+    if (!message.guild) return;
 
-  const logChannel = message.guild.channels.cache.get(process.env.LOG_CHANNEL_ID);
-  if (!logChannel) return;
+    const logChannel = message.guild.channels.cache.get(process.env.LOG_CHANNEL_ID);
+    if (!logChannel) return;
 
-  const author = message.author ? message.author.tag : 'Unknown user';
+    const author = message.author ? message.author.tag : 'Unknown user';
 
-  logChannel.send({
-    content: `🗑️ **Message Deleted**
+    await logChannel.send({
+      content: `🗑️ **Message Deleted**
 👤 Author: ${author}
-💬 Content: ${message.content || 'No content (embed/attachment)'}`,
-  }).catch(() => {});
+💬 Content: ${message.content || 'No content (embed/attachment or missing cache)'}`
+    });
+
+  } catch (err) {
+    console.error('Log error:', err);
+  }
 });
+
+/* ---------------- LOGIN ---------------- */
+
+client.login(process.env.TOKEN);
