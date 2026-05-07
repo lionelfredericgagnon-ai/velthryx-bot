@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { Events } = require('discord.js');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -73,3 +74,17 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 client.login(process.env.TOKEN);
+client.on(Events.MessageDelete, async (message) => {
+  if (!message.guild) return;
+
+  const logChannel = message.guild.channels.cache.get(process.env.LOG_CHANNEL_ID);
+  if (!logChannel) return;
+
+  const author = message.author ? message.author.tag : 'Unknown user';
+
+  logChannel.send({
+    content: `🗑️ **Message Deleted**
+👤 Author: ${author}
+💬 Content: ${message.content || 'No content (embed/attachment)'}`,
+  }).catch(() => {});
+});
