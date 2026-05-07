@@ -99,6 +99,12 @@ client.on(Events.MessageDelete, async (message) => {
   }
 });
 
+// ---------------- MESSAGE DELETE TEST ----------------
+
+client.on(Events.MessageDelete, async (message) => {
+  console.log("DELETE EVENT FIRED");
+});
+
 /* ---------------- LOGIN ---------------- */
 
 client.login(process.env.TOKEN);
