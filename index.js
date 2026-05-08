@@ -22,12 +22,26 @@ const client = new Client({
 
 client.commands = new Collection();
 
-/* ---------------- AUTO-MOD STORAGE ---------------- */
+/* ---------------- WARNING SYSTEM (JSON PERSISTENT) ---------------- */
 
-const warnings = new Map();
+const warningsFile = path.join(__dirname, 'data', 'warnings.json');
+
+function loadWarnings() {
+  if (!fs.existsSync(warningsFile)) return {};
+  return JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+}
+
+function saveWarnings(data) {
+  fs.writeFileSync(warningsFile, JSON.stringify(data, null, 2));
+}
+
+let warnings = loadWarnings();
+
+/* ---------------- SPAM STORAGE ---------------- */
+
 const userMessageMap = new Map();
 
-/* ---------------- MESSAGE AUTOMOD (B5 + B4 MERGED) ---------------- */
+/* ---------------- MESSAGE AUTOMOD (B4 + B5 + B6 CORE) ---------------- */
 
 client.on(Events.MessageCreate, async (message) => {
   try {
@@ -60,20 +74,22 @@ client.on(Events.MessageCreate, async (message) => {
       warnReason = "Invite link detected";
     }
 
-    /* ---------------- WARN SYSTEM ---------------- */
+    /* ---------------- WARN SYSTEM (PERSISTENT) ---------------- */
 
     if (warnReason) {
-      const current = warnings.get(userId) || 0;
+      const current = warnings[userId] || 0;
       const newWarnings = current + 1;
 
-      warnings.set(userId, newWarnings);
+      warnings[userId] = newWarnings;
+      saveWarnings(warnings);
 
       await message.reply(`⚠️ Warning (${newWarnings}/3): ${warnReason}`);
 
       if (newWarnings >= 3 && member.moderatable) {
         await member.timeout(5 * 60 * 1000, "Too many warnings (auto-mod)");
 
-        warnings.set(userId, 0);
+        warnings[userId] = 0;
+        saveWarnings(warnings);
 
         message.channel.send(
           `⏳ ${message.author} has been timed out.`
@@ -115,6 +131,7 @@ client.on(Events.MessageCreate, async (message) => {
 
       userMessageMap.delete(userId);
     }
+
   } catch (err) {
     console.error("AutoMod error:", err);
   }
