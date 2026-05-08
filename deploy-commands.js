@@ -2,49 +2,40 @@ require('dotenv').config();
 
 const fs = require('node:fs');
 const path = require('node:path');
-
 const { REST, Routes } = require('discord.js');
 
-const commands = [];
+function loadCommands(dir, commands = []) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-const foldersPath = path.join(__dirname, 'commands');
-const commandFolders = fs.readdirSync(foldersPath);
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
 
-for (const folder of commandFolders) {
-  const commandsPath = path.join(foldersPath, folder);
-
-  const commandFiles = fs
-    .readdirSync(commandsPath)
-    .filter(file => file.endsWith('.js'));
-
-  for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-
-    const command = require(filePath);
-
-    if ('data' in command && 'execute' in command) {
-      commands.push(command.data.toJSON());
-    } else {
-      console.log(`[WARNING] Missing data or execute in ${filePath}`);
+    if (entry.isDirectory()) {
+      loadCommands(fullPath, commands);
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      const command = require(fullPath);
+      if (command?.data?.toJSON) {
+        commands.push(command.data.toJSON());
+      }
     }
   }
+
+  return commands;
 }
 
+const commands = loadCommands(path.join(__dirname, 'commands'));
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
-    console.log(`🔄 Refreshing ${commands.length} application commands...`);
+    console.log(`Refreshing ${commands.length} application commands...`);
 
     await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
     );
 
-    console.log('✅ Slash commands registered successfully.');
+    console.log('Slash commands registered successfully.');
   } catch (error) {
     console.error(error);
   }

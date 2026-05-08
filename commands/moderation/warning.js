@@ -1,13 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const warningsFile = path.join(__dirname, '../../data/warnings.json');
-
-function loadWarnings() {
-  if (!fs.existsSync(warningsFile)) return {};
-  return JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
-}
+const { getWarningCount } = require('../../utils/store');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,17 +13,18 @@ module.exports = {
 
   async execute(interaction) {
     const user = interaction.options.getUser('user');
-    const warnings = loadWarnings();
-
-    const count = warnings[user.id] || 0;
+    const warnings = getWarningCount(interaction.guild.id, user.id);
 
     const embed = new EmbedBuilder()
-      .setTitle('⚠️ Warning Check')
-      .setColor(0xffcc00)
-      .setDescription(`**User:** ${user.tag}\n**Warnings:** ${count}/3`)
-      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+      .setTitle('Warning Check')
+      .setColor(0xf1c40f)
+      .setThumbnail(user.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: 'User', value: `${user.tag}`, inline: true },
+        { name: 'Warnings', value: `${warnings}`, inline: true }
+      )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   },
 };

@@ -3,31 +3,29 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('clear')
-    .setDescription('Delete multiple messages')
+    .setDescription('Delete messages in bulk')
     .addIntegerOption(option =>
       option.setName('amount')
-        .setDescription('Number of messages to delete (1-100)')
+        .setDescription('1-100 messages')
         .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(100)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   async execute(interaction) {
     const amount = interaction.options.getInteger('amount');
 
-    if (amount < 1 || amount > 100) {
-      return interaction.reply({
-        content: 'You must choose a number between 1 and 100.',
-        ephemeral: true,
-      });
+    if (!interaction.channel?.bulkDelete) {
+      return interaction.reply({ content: 'This channel does not support bulk delete.', ephemeral: true });
     }
 
-    const channel = interaction.channel;
+    const deleted = await interaction.channel.bulkDelete(amount, true).catch(() => null);
 
-    const deleted = await channel.bulkDelete(amount, true);
+    if (!deleted) {
+      return interaction.reply({ content: 'Could not delete messages here.', ephemeral: true });
+    }
 
-    await interaction.reply({
-      content: `🧹 Deleted ${deleted.size} messages.`,
-      ephemeral: true,
-    });
+    await interaction.reply({ content: `🧹 Deleted ${deleted.size} messages.`, ephemeral: true });
   },
 };
