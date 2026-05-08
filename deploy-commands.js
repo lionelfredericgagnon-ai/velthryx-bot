@@ -5,6 +5,8 @@ const path = require('node:path');
 const { REST, Routes } = require('discord.js');
 
 function loadCommands(dir, commands = []) {
+  if (!fs.existsSync(dir)) return commands;
+
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {

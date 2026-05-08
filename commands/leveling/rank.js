@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getUserRecord, buildProgressBar } = require('../../utils/store');
+const { getSettings, getUserRecord, getXpNeeded, buildProgressBar } = require('../../utils/store');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,12 +12,11 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const settings = getSettings(interaction.guild.id);
     const user = interaction.options.getUser('user') || interaction.user;
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
     const record = getUserRecord(interaction.guild.id, user.id);
-
-    const currentXp = record.xp % 100;
-    const bar = buildProgressBar(currentXp, 100, 12);
+    const needed = getXpNeeded(record.level, settings.xpCurveBase);
+    const bar = buildProgressBar(record.xp, needed, 12);
 
     const embed = new EmbedBuilder()
       .setTitle(`${user.username}'s Rank`)
@@ -25,15 +24,11 @@ module.exports = {
       .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: 'Level', value: String(record.level), inline: true },
-        { name: 'XP', value: `${currentXp}/100`, inline: true },
+        { name: 'XP', value: `${record.xp}/${needed}`, inline: true },
         { name: 'Messages', value: String(record.messages), inline: true },
-        { name: 'Progress', value: `${bar}\n${currentXp}%`, inline: false }
+        { name: 'Progress', value: `${bar}\n${Math.round((record.xp / needed) * 100)}%`, inline: false }
       )
       .setTimestamp();
-
-    if (member?.joinedAt) {
-      embed.addFields({ name: 'Joined Server', value: `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>`, inline: false });
-    }
 
     await interaction.reply({ embeds: [embed] });
   },

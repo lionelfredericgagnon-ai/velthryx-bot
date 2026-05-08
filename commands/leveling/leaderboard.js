@@ -15,10 +15,8 @@ module.exports = {
 
     const lines = [];
     for (const entry of board) {
-      let name = `<@${entry.userId}>`;
       const member = await interaction.guild.members.fetch(entry.userId).catch(() => null);
-      if (member) name = member.user.tag;
-
+      const name = member ? member.user.tag : `<@${entry.userId}>`;
       lines.push(`**#${entry.rank}** — ${name} • Level ${entry.level} • ${entry.xp} XP`);
     }
 
