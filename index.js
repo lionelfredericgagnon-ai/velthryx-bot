@@ -8,6 +8,7 @@ const {
   Collection,
   Events,
   GatewayIntentBits,
+  EmbedBuilder,
 } = require('discord.js');
 
 /* ---------------- CLIENT ---------------- */
@@ -22,7 +23,22 @@ const client = new Client({
 
 client.commands = new Collection();
 
-/* ---------------- WARNING SYSTEM (JSON PERSISTENT) ---------------- */
+/* ---------------- LOG SYSTEM ---------------- */
+
+async function sendLog(guild, embed) {
+  try {
+    if (!guild) return;
+
+    const channel = await guild.channels.fetch(process.env.LOG_CHANNEL_ID);
+    if (!channel || !channel.isTextBased()) return;
+
+    channel.send({ embeds: [embed] }).catch(() => {});
+  } catch (err) {
+    console.error("Log error:", err);
+  }
+}
+
+/* ---------------- WARNING SYSTEM (PERSISTENT) ---------------- */
 
 const warningsFile = path.join(__dirname, 'data', 'warnings.json');
 
@@ -41,7 +57,7 @@ let warnings = loadWarnings();
 
 const userMessageMap = new Map();
 
-/* ---------------- MESSAGE AUTOMOD (B4 + B5 + B6 CORE) ---------------- */
+/* ---------------- MESSAGE AUTOMOD ---------------- */
 
 client.on(Events.MessageCreate, async (message) => {
   try {
@@ -74,7 +90,7 @@ client.on(Events.MessageCreate, async (message) => {
       warnReason = "Invite link detected";
     }
 
-    /* ---------------- WARN SYSTEM (PERSISTENT) ---------------- */
+    /* ---------------- WARN SYSTEM ---------------- */
 
     if (warnReason) {
       const current = warnings[userId] || 0;
@@ -85,15 +101,36 @@ client.on(Events.MessageCreate, async (message) => {
 
       await message.reply(`⚠️ Warning (${newWarnings}/3): ${warnReason}`);
 
+      const embed = new EmbedBuilder()
+        .setTitle('⚠️ Warning Issued')
+        .setColor(0xffcc00)
+        .addFields(
+          { name: 'User', value: message.author.tag, inline: true },
+          { name: 'Reason', value: warnReason, inline: true },
+          { name: 'Warnings', value: `${newWarnings}/3`, inline: true }
+        )
+        .setTimestamp();
+
+      sendLog(message.guild, embed);
+
       if (newWarnings >= 3 && member.moderatable) {
         await member.timeout(5 * 60 * 1000, "Too many warnings (auto-mod)");
 
         warnings[userId] = 0;
         saveWarnings(warnings);
 
-        message.channel.send(
-          `⏳ ${message.author} has been timed out.`
-        );
+        message.channel.send(`⏳ ${message.author} has been timed out.`);
+
+        const timeoutEmbed = new EmbedBuilder()
+          .setTitle('⏳ Timeout (Warnings)')
+          .setColor(0xff0000)
+          .addFields(
+            { name: 'User', value: message.author.tag },
+            { name: 'Reason', value: '3/3 warnings reached' }
+          )
+          .setTimestamp();
+
+        sendLog(message.guild, timeoutEmbed);
       }
     }
 
@@ -124,9 +161,18 @@ client.on(Events.MessageCreate, async (message) => {
     if (userData.count >= 5) {
       if (member.moderatable) {
         await member.timeout(60_000, 'Spam detected (auto-mod)');
-        message.channel.send(
-          `⏳ ${message.author} was timed out for spam.`
-        );
+        message.channel.send(`⏳ ${message.author} was timed out for spam.`);
+
+        const spamEmbed = new EmbedBuilder()
+          .setTitle('⏳ Auto Timeout (Spam)')
+          .setColor(0xff0000)
+          .addFields(
+            { name: 'User', value: message.author.tag },
+            { name: 'Duration', value: '60 seconds' }
+          )
+          .setTimestamp();
+
+        sendLog(message.guild, spamEmbed);
       }
 
       userMessageMap.delete(userId);
