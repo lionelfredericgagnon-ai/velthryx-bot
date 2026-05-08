@@ -10,6 +10,8 @@ const {
   GatewayIntentBits,
 } = require('discord.js');
 
+/* ---------------- CLIENT ---------------- */
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -44,7 +46,7 @@ for (const folder of commandFolders) {
   }
 }
 
-/* ---------------- READY EVENT ---------------- */
+/* ---------------- READY ---------------- */
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
@@ -56,7 +58,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
-
   if (!command) return;
 
   try {
@@ -77,33 +78,65 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-/* ---------------- MESSAGE DELETE LOGGING ---------------- */
-
-client.on(Events.MessageDelete, async (message) => {
+const userMessageMap = new Map();
+client.on(Events.MessageCreate, async (message) => {
   try {
-    if (!message.guild) return;
+    if (!message.guild || message.author.bot) return;
 
-    const channel = await message.guild.channels.fetch(process.env.LOG_CHANNEL_ID);
-    if (!channel || !channel.isTextBased()) return;
+    const userId = message.author.id;
+    const now = Date.now();
 
-    const author = message.author?.tag || "Unknown user";
+    /* ---------------- SPAM TRACKING ---------------- */
 
-    await channel.send({
-      content: `🗑️ **Message Deleted**
-👤 Author: ${author}
-💬 Content: ${message.content || "No content (cached or embed)"}`,
-    });
+    const userData = userMessageMap.get(userId) || {
+      count: 0,
+      lastMessage: '',
+      lastTime: 0,
+    };
+
+    // reset if too old (5 seconds window)
+    if (now - userData.lastTime > 5000) {
+      userData.count = 0;
+    }
+
+    userData.lastTime = now;
+
+    // repeated message spam
+    if (message.content === userData.lastMessage) {
+      userData.count += 1;
+    } else {
+      userData.count = 1;
+    }
+
+    userData.lastMessage = message.content;
+
+    userMessageMap.set(userId, userData);
+
+    /* ---------------- AUTO ACTION ---------------- */
+
+    if (userData.count >= 5) {
+      const member = await message.guild.members.fetch(userId).catch(() => null);
+      if (!member) return;
+
+      if (member.moderatable) {
+        await member.timeout(60_000, 'Spam detected (auto-mod)');
+        message.channel.send(`⏳ ${message.author} was timed out for spam.`);
+      }
+
+      userMessageMap.delete(userId);
+    }
 
   } catch (err) {
-    console.error("Delete log error:", err);
+    console.error('AutoMod error:', err);
   }
 });
 
-// ---------------- MESSAGE DELETE TEST ----------------
-
+/* ---------------- MESSAGE DELETE (DISABLED FOR NOW) ---------------- */
+/*
 client.on(Events.MessageDelete, async (message) => {
   console.log("DELETE EVENT FIRED");
 });
+*/
 
 /* ---------------- LOGIN ---------------- */
 
