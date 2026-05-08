@@ -1,6 +1,6 @@
-const { SlashCommandBuilder } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const warningsFile = path.join(__dirname, '../../data/warnings.json');
 
@@ -25,8 +25,13 @@ module.exports = {
 
     const count = warnings[user.id] || 0;
 
-    await interaction.reply(
-      `⚠️ ${user.tag} has ${count}/3 warnings`
-    );
+    const embed = new EmbedBuilder()
+      .setTitle('⚠️ Warning Check')
+      .setColor(0xffcc00)
+      .setDescription(`**User:** ${user.tag}\n**Warnings:** ${count}/3`)
+      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
   },
 };
