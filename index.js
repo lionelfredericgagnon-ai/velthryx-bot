@@ -29,10 +29,17 @@ async function sendLog(guild, embed) {
   try {
     if (!guild) return;
 
-    const channel = await guild.channels.fetch(process.env.LOG_CHANNEL_ID);
+    const channelId = process.env.LOG_CHANNEL_ID;
+    if (!channelId) {
+      console.error("LOG_CHANNEL_ID missing in .env");
+      return;
+    }
+
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) return;
 
-    channel.send({ embeds: [embed] }).catch(() => {});
+    await channel.send({ embeds: [embed] }).catch(console.error);
+
   } catch (err) {
     console.error("Log error:", err);
   }
@@ -42,9 +49,18 @@ async function sendLog(guild, embed) {
 
 const warningsFile = path.join(__dirname, 'data', 'warnings.json');
 
+// ensure file exists
+if (!fs.existsSync(warningsFile)) {
+  fs.mkdirSync(path.dirname(warningsFile), { recursive: true });
+  fs.writeFileSync(warningsFile, "{}");
+}
+
 function loadWarnings() {
-  if (!fs.existsSync(warningsFile)) return {};
-  return JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+  try {
+    return JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+  } catch {
+    return {};
+  }
 }
 
 function saveWarnings(data) {
