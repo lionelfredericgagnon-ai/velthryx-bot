@@ -22,6 +22,104 @@ const client = new Client({
 
 client.commands = new Collection();
 
+/* ---------------- AUTO-MOD STORAGE ---------------- */
+
+const warnings = new Map();
+const userMessageMap = new Map();
+
+/* ---------------- MESSAGE AUTOMOD (B5 + B4 MERGED) ---------------- */
+
+client.on(Events.MessageCreate, async (message) => {
+  try {
+    if (!message.guild || message.author.bot) return;
+
+    const content = message.content || "";
+    const userId = message.author.id;
+    const now = Date.now();
+
+    const member = await message.guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    let warnReason = null;
+
+    /* ---------------- ANTI CAPS ---------------- */
+
+    const capsRatio =
+      content.replace(/[^A-Z]/g, '').length / (content.length || 1);
+
+    if (content.length > 8 && capsRatio > 0.7) {
+      warnReason = "Excessive caps";
+    }
+
+    /* ---------------- ANTI INVITES ---------------- */
+
+    if (
+      content.includes("discord.gg") ||
+      content.includes("discord.com/invite")
+    ) {
+      warnReason = "Invite link detected";
+    }
+
+    /* ---------------- WARN SYSTEM ---------------- */
+
+    if (warnReason) {
+      const current = warnings.get(userId) || 0;
+      const newWarnings = current + 1;
+
+      warnings.set(userId, newWarnings);
+
+      await message.reply(`⚠️ Warning (${newWarnings}/3): ${warnReason}`);
+
+      if (newWarnings >= 3 && member.moderatable) {
+        await member.timeout(5 * 60 * 1000, "Too many warnings (auto-mod)");
+
+        warnings.set(userId, 0);
+
+        message.channel.send(
+          `⏳ ${message.author} has been timed out.`
+        );
+      }
+    }
+
+    /* ---------------- SPAM DETECTION ---------------- */
+
+    const userData = userMessageMap.get(userId) || {
+      count: 0,
+      lastMessage: '',
+      lastTime: 0,
+    };
+
+    if (now - userData.lastTime > 5000) {
+      userData.count = 0;
+    }
+
+    userData.lastTime = now;
+
+    if (content === userData.lastMessage) {
+      userData.count += 1;
+    } else {
+      userData.count = 1;
+    }
+
+    userData.lastMessage = content;
+
+    userMessageMap.set(userId, userData);
+
+    if (userData.count >= 5) {
+      if (member.moderatable) {
+        await member.timeout(60_000, 'Spam detected (auto-mod)');
+        message.channel.send(
+          `⏳ ${message.author} was timed out for spam.`
+        );
+      }
+
+      userMessageMap.delete(userId);
+    }
+  } catch (err) {
+    console.error("AutoMod error:", err);
+  }
+});
+
 /* ---------------- COMMAND HANDLER ---------------- */
 
 const foldersPath = path.join(__dirname, 'commands');
@@ -77,66 +175,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
-
-const userMessageMap = new Map();
-client.on(Events.MessageCreate, async (message) => {
-  try {
-    if (!message.guild || message.author.bot) return;
-
-    const userId = message.author.id;
-    const now = Date.now();
-
-    /* ---------------- SPAM TRACKING ---------------- */
-
-    const userData = userMessageMap.get(userId) || {
-      count: 0,
-      lastMessage: '',
-      lastTime: 0,
-    };
-
-    // reset if too old (5 seconds window)
-    if (now - userData.lastTime > 5000) {
-      userData.count = 0;
-    }
-
-    userData.lastTime = now;
-
-    // repeated message spam
-    if (message.content === userData.lastMessage) {
-      userData.count += 1;
-    } else {
-      userData.count = 1;
-    }
-
-    userData.lastMessage = message.content;
-
-    userMessageMap.set(userId, userData);
-
-    /* ---------------- AUTO ACTION ---------------- */
-
-    if (userData.count >= 5) {
-      const member = await message.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
-
-      if (member.moderatable) {
-        await member.timeout(60_000, 'Spam detected (auto-mod)');
-        message.channel.send(`⏳ ${message.author} was timed out for spam.`);
-      }
-
-      userMessageMap.delete(userId);
-    }
-
-  } catch (err) {
-    console.error('AutoMod error:', err);
-  }
-});
-
-/* ---------------- MESSAGE DELETE (DISABLED FOR NOW) ---------------- */
-/*
-client.on(Events.MessageDelete, async (message) => {
-  console.log("DELETE EVENT FIRED");
-});
-*/
 
 /* ---------------- LOGIN ---------------- */
 
